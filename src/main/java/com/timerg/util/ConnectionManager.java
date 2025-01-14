@@ -1,6 +1,7 @@
 package com.timerg.util;
 
 
+import java.io.File;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -22,6 +23,7 @@ public class ConnectionManager {
     private static List<Connection> sourceConnections;
 
     static {
+        System.out.println("Статический блок ConnectionManager выполняется");
         loadDriver();
         initConnectionPool();
     }
