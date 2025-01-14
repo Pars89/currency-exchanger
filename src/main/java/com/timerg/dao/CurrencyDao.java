@@ -1,5 +1,6 @@
 package com.timerg.dao;
 
+import com.timerg.dto.CurrencyDto;
 import com.timerg.entity.CurrencyEntity;
 import com.timerg.util.ConnectionManager;
 
@@ -42,6 +43,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             FROM Currencies
             """;
     private static final String FIND_BY_ID_SQL = FIND_ALL_SQL + "WHERE id = ?";
+    private static final String FIND_BY_CODE_SQL = FIND_ALL_SQL + "WHERE Code = ?";
 
     private CurrencyDao() {
     }
@@ -109,10 +111,17 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
     @Override
     public Optional<CurrencyEntity> findById(Integer id) {
 
-        try (Connection connection = ConnectionManager.get();
-             var prepareStatement = connection.prepareStatement(FIND_BY_ID_SQL)) {
+        try (Connection connection = ConnectionManager.get()) {
+            return findById(id, connection);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-            prepareStatement.setInt(1, id);
+    public Optional<CurrencyEntity> findById(int currencyId, Connection connection) {
+        try (var prepareStatement = connection.prepareStatement(FIND_BY_ID_SQL)) {
+
+            prepareStatement.setInt(1, currencyId);
 
             var resultSet = prepareStatement.executeQuery();
 
@@ -132,7 +141,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
     @Override
     public List<CurrencyEntity> findAll() {
 
-        try (Connection connection = ConnectionManager.get();
+        try (var connection = ConnectionManager.get();
              var prepareStatement = connection.prepareStatement(FIND_ALL_SQL)) {
 
             var resultSet = prepareStatement.executeQuery();
@@ -163,7 +172,29 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
                 .build();
     }
 
+    public Optional<CurrencyEntity> findByCode(String code) {
+        try (Connection connection = ConnectionManager.get();
+             var prepareStatement = connection.prepareStatement(FIND_BY_CODE_SQL)) {
+
+            prepareStatement.setString(1, code);
+
+            var resultSet = prepareStatement.executeQuery();
+
+            CurrencyEntity entity = null;
+
+            if (resultSet.next()) {
+                entity = buildCurrencyEntity(resultSet);
+            }
+
+            return Optional.ofNullable(entity);
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static CurrencyDao getInstance() {
         return INSTANCE;
     }
+
 }
