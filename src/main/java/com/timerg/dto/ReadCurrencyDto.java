@@ -1,20 +1,17 @@
 package com.timerg.dto;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.util.Objects;
 
 @Builder
-public class CurrencyDto {
+public class ReadCurrencyDto {
     private final Integer id;
     private final String code;
     private final String fullName;
     private final String sign;
 
-    public CurrencyDto(Integer id, String code, String fullName, String sign) {
+    public ReadCurrencyDto(Integer id, String code, String fullName, String sign) {
         this.id = id;
         this.code = code;
         this.fullName = fullName;
@@ -41,7 +38,7 @@ public class CurrencyDto {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        CurrencyDto that = (CurrencyDto) o;
+        ReadCurrencyDto that = (ReadCurrencyDto) o;
         return Objects.equals(id, that.id) && Objects.equals(code, that.code) && Objects.equals(fullName, that.fullName) && Objects.equals(sign, that.sign);
     }
 

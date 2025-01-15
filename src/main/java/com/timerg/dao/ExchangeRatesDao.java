@@ -4,6 +4,7 @@ import com.timerg.entity.CurrencyEntity;
 import com.timerg.entity.ExchangeRatesEntity;
 import com.timerg.util.ConnectionManager;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -42,6 +43,15 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             FROM ExchangeRates
             """;
     private static final String FIND_BY_ID_SQL = FIND_ALL_SQL + "WHERE id = ?";
+    private static final String FIND_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL = FIND_ALL_SQL + """
+            WHERE BaseCurrencyId = ? AND TargetCurrencyId = ?
+            """;
+    private static final String UPDATE_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL =  """
+            UPDATE ExchangeRates
+            SET 
+            Rate = ?
+            WHERE BaseCurrencyId = ? AND TargetCurrencyId = ?           
+            """;
 
     private static CurrencyDao currencyDao = CurrencyDao.getInstance();
 
@@ -150,6 +160,50 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
         }
     }
 
+    public Optional<ExchangeRatesEntity> findByBaseCurrencyIdAndTargetCurrencyId(Integer baseCurrencyId, Integer targetCurrencyId) {
+        try (Connection connection = ConnectionManager.get();
+             var prepareStatement = connection.prepareStatement(FIND_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL)) {
+
+            prepareStatement.setInt(1, baseCurrencyId);
+            prepareStatement.setInt(2, targetCurrencyId);
+
+            var resultSet = prepareStatement.executeQuery();
+
+            ExchangeRatesEntity exchangeRatesEntity = null;
+
+            if (resultSet.next()) {
+                exchangeRatesEntity = buildExchangeRatesEntity(resultSet);
+            }
+
+            return Optional.ofNullable(exchangeRatesEntity);
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    public Optional<ExchangeRatesEntity> updateByBaseCurrencyIdAndTargetCurrencyId(Integer baseCurrencyId, Integer targetCurrencyId, BigDecimal rate) {
+        try (Connection connection = ConnectionManager.get();
+             var prepareStatement = connection.prepareStatement(UPDATE_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL)) {
+
+            prepareStatement.setBigDecimal(1, rate);
+            prepareStatement.setInt(2, baseCurrencyId);
+            prepareStatement.setInt(3, targetCurrencyId);
+
+            var resultSet = prepareStatement.executeQuery();
+
+            ExchangeRatesEntity exchangeRatesEntity = null;
+
+            if (resultSet.next()) {
+                exchangeRatesEntity = buildExchangeRatesEntity(resultSet);
+            }
+
+            return Optional.ofNullable(exchangeRatesEntity);
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private ExchangeRatesEntity buildExchangeRatesEntity(ResultSet resultSet) throws SQLException {
 
         Optional<CurrencyEntity> baseCurrencyId = currencyDao.findById(resultSet.getInt("BaseCurrencyId"), resultSet.getStatement().getConnection());
@@ -160,7 +214,7 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
                 .id(resultSet.getInt("id"))
                 .BaseCurrencyId(baseCurrencyId.orElse(null))
                 .TargetCurrencyId(targetCurrencyId.orElse(null))
-                .Rate(resultSet.getBigDecimal("Rate"))
+                .rate(resultSet.getBigDecimal("Rate"))
                 .build();
     }
 

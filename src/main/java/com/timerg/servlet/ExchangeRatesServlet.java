@@ -1,9 +1,10 @@
 package com.timerg.servlet;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.timerg.dto.CreateCurrencyDto;
+import com.timerg.dto.CreateExchangeRateDto;
 import com.timerg.dto.ReadCurrencyDto;
-import com.timerg.service.CurrencyService;
+import com.timerg.dto.ReadExchangeRateDto;
+import com.timerg.service.ExchangeRatesService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -14,19 +15,18 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
-@WebServlet("/currencies")
-public class CurrenciesServlet extends HttpServlet {
-    private final CurrencyService currencyService = CurrencyService.getInstance();
-
+@WebServlet("/exchangeRates")
+public class ExchangeRatesServlet extends HttpServlet {
+    private final ExchangeRatesService exchangeRatesService = ExchangeRatesService.getInstance();
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        List<ReadExchangeRateDto> exchangeRatesServiceAll = exchangeRatesService.findAll();
 
-        List<ReadCurrencyDto> currencies = currencyService.findAll();
-
-        String ans = objectMapper.writeValueAsString(currencies);
+        String ans = objectMapper.writeValueAsString(exchangeRatesServiceAll);
 
         resp.setContentType("application/json");
         resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
@@ -40,14 +40,20 @@ public class CurrenciesServlet extends HttpServlet {
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 
 
-        ReadCurrencyDto readCurrencyDto = currencyService.create(CreateCurrencyDto.builder()
-                .fullName(req.getParameter("name"))
-                .code(req.getParameter("code"))
-                .sign(req.getParameter("sign"))
-                .build()
+        Optional<ReadExchangeRateDto> readExchangeRateDto = exchangeRatesService.create(
+                CreateExchangeRateDto.builder()
+                        .baseCurrencyId(req.getParameter("baseCurrencyCode"))
+                        .targetCurrencyId(req.getParameter("targetCurrencyCode"))
+                        .rate(req.getParameter("rate"))
+                        .build()
         );
 
-        String ans = objectMapper.writeValueAsString(readCurrencyDto);
+        String ans = "";
+        if (readExchangeRateDto.isPresent()) {
+            ans = objectMapper.writeValueAsString(readExchangeRateDto.get());
+        } else {
+            ans = "null";
+        }
 
         resp.setContentType("application/json");
         resp.setCharacterEncoding(StandardCharsets.UTF_8.name());

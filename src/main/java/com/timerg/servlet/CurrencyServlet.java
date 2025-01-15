@@ -1,7 +1,7 @@
 package com.timerg.servlet;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.timerg.dto.CurrencyDto;
+import com.timerg.dto.ReadCurrencyDto;
 import com.timerg.service.CurrencyService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -28,7 +28,7 @@ public class CurrencyServlet extends HttpServlet {
         String ans = "";
 
 
-        Optional<CurrencyDto> byCode = currencyService.findByCode(strings[2]);
+        Optional<ReadCurrencyDto> byCode = currencyService.findByCode(strings[2]);
 
         if (byCode.isPresent()) {
             ans = objectMapper.writeValueAsString(byCode.get());
