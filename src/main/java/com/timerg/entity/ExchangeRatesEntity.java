@@ -15,5 +15,5 @@ public class ExchangeRatesEntity {
     private Integer id;
     private CurrencyEntity BaseCurrencyId;
     private CurrencyEntity TargetCurrencyId;
-    private BigDecimal Rate;
+    private BigDecimal rate;
 }

@@ -23,7 +23,6 @@ public class ConnectionManager {
     private static List<Connection> sourceConnections;
 
     static {
-        System.out.println("Статический блок ConnectionManager выполняется");
         loadDriver();
         initConnectionPool();
     }

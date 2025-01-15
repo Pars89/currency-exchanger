@@ -2,19 +2,11 @@ package com.timerg;
 
 import com.timerg.dao.CurrencyDao;
 import com.timerg.dao.ExchangeRatesDao;
-import com.timerg.dto.CurrencyDto;
 import com.timerg.entity.CurrencyEntity;
 import com.timerg.entity.ExchangeRatesEntity;
 import com.timerg.service.CurrencyService;
-import com.timerg.util.ConnectionManager;
 
 import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.List;
-import java.util.Optional;
 
 public class Main {
     public static void main(String[] argsStrings) {
@@ -44,7 +36,7 @@ public class Main {
                 .builder()
                 .BaseCurrencyId(currencyDao.findById(7).orElse(null))
                 .TargetCurrencyId(currencyDao.findById(8).orElse(null))
-                .Rate(BigDecimal.valueOf(1.6))
+                .rate(BigDecimal.valueOf(1.6))
                 .build();
 
 //        exchangeRatesDao.save(exchangeRatesEntity);

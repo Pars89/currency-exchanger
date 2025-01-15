@@ -1,6 +1,5 @@
 package com.timerg.dao;
 
-import com.timerg.dto.CurrencyDto;
 import com.timerg.entity.CurrencyEntity;
 import com.timerg.util.ConnectionManager;
 
