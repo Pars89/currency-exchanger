@@ -8,6 +8,7 @@ import com.timerg.entity.ExchangeRatesEntity;
 import com.timerg.mapper.CurrencyEntityMapper;
 import com.timerg.mapper.ReadCurrencyMapper;
 import com.timerg.util.RateFormat;
+import jakarta.servlet.http.Part;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -36,10 +37,7 @@ public class ExchangeRatesService {
                 .collect(Collectors.toList());
     }
 
-    public Optional<ReadExchangeRateDto> findByCodes(String pairCode) {
-        // parse
-        String baseCode = pairCode.substring(0, 3).toUpperCase();
-        String targetCode = pairCode.substring(3, 6).toUpperCase();
+    public Optional<ReadExchangeRateDto> findByCodes(String baseCode, String targetCode) {
 
         // get 1 id and 2 id from currencies using code
         Optional<ReadCurrencyDto> baseCurrencyOpt = currencyService.findByCode(baseCode);
@@ -98,10 +96,7 @@ public class ExchangeRatesService {
                 .build());
     }
 
-    public Optional<ReadExchangeRateDto> updateByCodes(String pairCode, String rate) {
-        // parse
-        String baseCode = pairCode.substring(0, 3).toUpperCase();
-        String targetCode = pairCode.substring(3, 6).toUpperCase();
+    public Optional<ReadExchangeRateDto> updateByCodes(String baseCode, String targetCode, String rate) {
 
         // get 1 id and 2 id from currencies using code
         Optional<ReadCurrencyDto> baseCurrencyOpt = currencyService.findByCode(baseCode);
@@ -115,14 +110,23 @@ public class ExchangeRatesService {
         ReadCurrencyDto readBaseCurrencyDto = baseCurrencyOpt.get();
         ReadCurrencyDto readTargetCurrencyDto = targetCurrencyOpt.get();
 
-        // save updateByBaseCurrencyIdAndTargetCurrencyId
-        return exchangeRatesDao.updateByBaseCurrencyIdAndTargetCurrencyId(readBaseCurrencyDto.getId(), readTargetCurrencyDto.getId(), new BigDecimal(rate))
-                .map(exchangeRatesEntity -> ReadExchangeRateDto.builder()
-                        .id(exchangeRatesEntity.getId())
-                        .baseCurrencyId(readBaseCurrencyDto)
-                        .targetCurrencyId(readTargetCurrencyDto)
-                        .rate(exchangeRatesEntity.getRate())
-                        .build());
+        // save updateByBaseCurrencyIdAndTargetCurrencyId and check
+        if (exchangeRatesDao.updateByBaseCurrencyIdAndTargetCurrencyId(
+                readBaseCurrencyDto.getId(),
+                readTargetCurrencyDto.getId(),
+                new BigDecimal(rate))) {
+
+            return exchangeRatesDao.findByBaseCurrencyIdAndTargetCurrencyId(readBaseCurrencyDto.getId(), readTargetCurrencyDto.getId())
+                    .map(exchangeRatesEntity -> ReadExchangeRateDto.builder()
+                            .id(exchangeRatesEntity.getId())
+                            .baseCurrencyId(readBaseCurrencyDto)
+                            .targetCurrencyId(readTargetCurrencyDto)
+                            .rate(exchangeRatesEntity.getRate())
+                            .build());
+
+        } else {
+            return Optional.empty();
+        }
     }
 
     public static ExchangeRatesService getInstance() {

@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -21,14 +22,26 @@ public class ExchangeRateServlet extends HttpServlet {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        String method = req.getMethod();
+        if (!method.equals("PATCH")) {
+            super.service(req, resp);
+        }
+
+        this.doPatch(req, resp);
+    }
+
+    @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 
         String[] strings = req.getRequestURI().split("/");
 
         String ans = "";
 
-
-        Optional<ReadExchangeRateDto> byCode = exchangeRatesService.findByCodes(strings[2]);
+        // parse
+        String baseCode = strings[2].substring(0, 3).toUpperCase();
+        String targetCode = strings[2].substring(3, 6).toUpperCase();
+        Optional<ReadExchangeRateDto> byCode = exchangeRatesService.findByCodes(baseCode, targetCode);
 
         if (byCode.isPresent()) {
             ans = objectMapper.writeValueAsString(byCode.get());
@@ -46,11 +59,18 @@ public class ExchangeRateServlet extends HttpServlet {
 
     @Override
     protected void doPatch(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+
+        String rate = req.getReader().readLine().split("=")[1];
+
         String[] strings = req.getRequestURI().split("/");
 
         String ans = "";
 
-        Optional<ReadExchangeRateDto> byCode = exchangeRatesService.updateByCodes(strings[2], req.getParameter("rate"));
+        // parse
+        String baseCode = strings[2].substring(0, 3).toUpperCase();
+        String targetCode = strings[2].substring(3, 6).toUpperCase();
+
+        Optional<ReadExchangeRateDto> byCode = exchangeRatesService.updateByCodes(baseCode, targetCode, rate);
 
         if (byCode.isPresent()) {
             ans = objectMapper.writeValueAsString(byCode.get());
