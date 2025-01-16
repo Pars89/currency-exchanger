@@ -2,6 +2,7 @@ package com.timerg.dao;
 
 import com.timerg.entity.CurrencyEntity;
 import com.timerg.entity.ExchangeRatesEntity;
+import com.timerg.exception.DaoException;
 import com.timerg.util.ConnectionManager;
 
 import java.math.BigDecimal;
@@ -13,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
+public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity> {
     private static final ExchangeRatesDao INSTANCE = new ExchangeRatesDao();
     private static final String SAVE_SQL = """
             INSERT INTO ExchangeRates
@@ -42,21 +43,22 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             Rate
             FROM ExchangeRates
             """;
-    private static final String FIND_BY_ID_SQL = FIND_ALL_SQL + "WHERE id = ?";
+    private static final String FIND_BY_ID_SQL = FIND_ALL_SQL + " WHERE id = ?";
     private static final String FIND_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL = FIND_ALL_SQL + """
             WHERE BaseCurrencyId = ? AND TargetCurrencyId = ?
             """;
-    private static final String UPDATE_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL =  """
+    private static final String UPDATE_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL = """
             UPDATE ExchangeRates
             SET 
             Rate = ?
             WHERE BaseCurrencyId = ? AND TargetCurrencyId = ?           
             """;
 
-    private static CurrencyDao currencyDao = CurrencyDao.getInstance();
+    private final CurrencyDao currencyDao = CurrencyDao.getInstance();
 
     private ExchangeRatesDao() {
     }
+
     @Override
     public ExchangeRatesEntity save(ExchangeRatesEntity exchangeRatesEntity) {
         try (Connection connection = ConnectionManager.get();
@@ -77,7 +79,7 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             return exchangeRatesEntity;
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
@@ -95,7 +97,7 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             prepareStatement.executeUpdate();
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
@@ -111,29 +113,7 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             return executeUpdate > 0;
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
-    public Optional<ExchangeRatesEntity> findById(Integer id) {
-        try (Connection connection = ConnectionManager.get();
-             var prepareStatement = connection.prepareStatement(FIND_BY_ID_SQL)) {
-
-            prepareStatement.setInt(1, id);
-
-            var resultSet = prepareStatement.executeQuery();
-
-            ExchangeRatesEntity exchangeRatesEntity = null;
-
-            if (resultSet.next()) {
-                exchangeRatesEntity = buildExchangeRatesEntity(resultSet);
-            }
-
-            return Optional.ofNullable(exchangeRatesEntity);
-
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
     @Override
@@ -156,16 +136,33 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             return exchangeRatesEntities;
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
+        }
+    }
+
+    @Override
+    public Optional<ExchangeRatesEntity> findById(Integer id) {
+        try (Connection connection = ConnectionManager.get()) {
+            return findBy(connection, FIND_BY_ID_SQL, id);
+        } catch (SQLException e) {
+            throw new DaoException(e);
         }
     }
 
     public Optional<ExchangeRatesEntity> findByBaseCurrencyIdAndTargetCurrencyId(Integer baseCurrencyId, Integer targetCurrencyId) {
-        try (Connection connection = ConnectionManager.get();
-             var prepareStatement = connection.prepareStatement(FIND_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL)) {
+        try (Connection connection = ConnectionManager.get()) {
+            return findBy(connection, FIND_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL, baseCurrencyId, targetCurrencyId);
+        } catch (SQLException e) {
+            throw new DaoException(e);
+        }
+    }
 
-            prepareStatement.setInt(1, baseCurrencyId);
-            prepareStatement.setInt(2, targetCurrencyId);
+    private Optional<ExchangeRatesEntity> findBy(Connection connection, String sqlQuery, Object... params) {
+        try (var prepareStatement = connection.prepareStatement(sqlQuery)) {
+
+            for (int i = 0; i < params.length; i++) {
+                prepareStatement.setObject(i + 1, params[i]);
+            }
 
             var resultSet = prepareStatement.executeQuery();
 
@@ -178,9 +175,11 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             return Optional.ofNullable(exchangeRatesEntity);
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
+
     }
+
     public boolean updateByBaseCurrencyIdAndTargetCurrencyId(Integer baseCurrencyId, Integer targetCurrencyId, BigDecimal rate) {
         try (Connection connection = ConnectionManager.get();
              var prepareStatement = connection.prepareStatement(UPDATE_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL)) {
@@ -192,20 +191,19 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             return prepareStatement.executeUpdate() > 0;
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
     private ExchangeRatesEntity buildExchangeRatesEntity(ResultSet resultSet) throws SQLException {
 
-        Optional<CurrencyEntity> baseCurrencyId = currencyDao.findById(resultSet.getInt("BaseCurrencyId"), resultSet.getStatement().getConnection());
-        Optional<CurrencyEntity> targetCurrencyId = currencyDao.findById(resultSet.getInt("TargetCurrencyId"), resultSet.getStatement().getConnection());
+        Optional<CurrencyEntity> baseCurrencyId = currencyDao.findById(resultSet.getStatement().getConnection(), resultSet.getInt("BaseCurrencyId"));
+        Optional<CurrencyEntity> targetCurrencyId = currencyDao.findById(resultSet.getStatement().getConnection(), resultSet.getInt("TargetCurrencyId"));
 
-        return new ExchangeRatesEntity()
-                .builder()
+        return ExchangeRatesEntity.builder()
                 .id(resultSet.getInt("id"))
-                .BaseCurrencyId(baseCurrencyId.orElse(null))
-                .TargetCurrencyId(targetCurrencyId.orElse(null))
+                .baseCurrencyId(baseCurrencyId.orElse(null))
+                .targetCurrencyId(targetCurrencyId.orElse(null))
                 .rate(resultSet.getBigDecimal("Rate"))
                 .build();
     }

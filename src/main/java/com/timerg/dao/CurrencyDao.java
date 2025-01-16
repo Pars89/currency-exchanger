@@ -1,7 +1,9 @@
 package com.timerg.dao;
 
 import com.timerg.entity.CurrencyEntity;
+import com.timerg.exception.DaoException;
 import com.timerg.util.ConnectionManager;
+import lombok.SneakyThrows;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -41,8 +43,8 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             Sign
             FROM Currencies
             """;
-    private static final String FIND_BY_ID_SQL = FIND_ALL_SQL + "WHERE id = ?";
-    private static final String FIND_BY_CODE_SQL = FIND_ALL_SQL + "WHERE Code = ?";
+    private static final String FIND_BY_ID_SQL = FIND_ALL_SQL + " WHERE id = ?";
+    private static final String FIND_BY_CODE_SQL = FIND_ALL_SQL + " WHERE Code = ?";
 
     private CurrencyDao() {
     }
@@ -68,7 +70,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             return currencyEntity;
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
@@ -86,7 +88,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             prepareStatement.executeUpdate();
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
@@ -100,27 +102,38 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
 
             var executeUpdate = prepareStatement.executeUpdate();
 
-            return executeUpdate > 0;
+            return executeUpdate == 1;
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
     @Override
     public Optional<CurrencyEntity> findById(Integer id) {
-
         try (Connection connection = ConnectionManager.get()) {
-            return findById(id, connection);
+            return findById(connection, id);
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
-    public Optional<CurrencyEntity> findById(int currencyId, Connection connection) {
-        try (var prepareStatement = connection.prepareStatement(FIND_BY_ID_SQL)) {
+    public Optional<CurrencyEntity> findById(Connection connection, int currencyId) {
+        return findBy(connection, FIND_BY_ID_SQL, currencyId);
+    }
 
-            prepareStatement.setInt(1, currencyId);
+    public Optional<CurrencyEntity> findByCode(String code) {
+        try (Connection connection = ConnectionManager.get()) {
+            return findBy(connection, FIND_BY_CODE_SQL, code);
+        } catch (SQLException e) {
+            throw new DaoException(e);
+        }
+    }
+
+    private Optional<CurrencyEntity> findBy(Connection connection, String sqlQuery, Object param) {
+        try (var prepareStatement = connection.prepareStatement(sqlQuery)) {
+
+            prepareStatement.setObject(1, param);
 
             var resultSet = prepareStatement.executeQuery();
 
@@ -133,7 +146,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             return Optional.ofNullable(entity);
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
@@ -145,51 +158,26 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
 
             var resultSet = prepareStatement.executeQuery();
 
-            CurrencyEntity currencyEntity = null;
-
             List<CurrencyEntity> currencies = new ArrayList<>();
 
             while (resultSet.next()) {
-                currencyEntity = buildCurrencyEntity(resultSet);
-                currencies.add(currencyEntity);
+                currencies.add(buildCurrencyEntity(resultSet));
             }
 
             return currencies;
 
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new DaoException(e);
         }
     }
 
     private CurrencyEntity buildCurrencyEntity(ResultSet resultSet) throws SQLException {
-        return new CurrencyEntity()
-                .builder()
+        return CurrencyEntity.builder()
                 .id(resultSet.getInt("id"))
                 .code(resultSet.getString("Code"))
                 .fullName(resultSet.getString("FullName"))
                 .sign(resultSet.getString("Sign"))
                 .build();
-    }
-
-    public Optional<CurrencyEntity> findByCode(String code) {
-        try (Connection connection = ConnectionManager.get();
-             var prepareStatement = connection.prepareStatement(FIND_BY_CODE_SQL)) {
-
-            prepareStatement.setString(1, code);
-
-            var resultSet = prepareStatement.executeQuery();
-
-            CurrencyEntity entity = null;
-
-            if (resultSet.next()) {
-                entity = buildCurrencyEntity(resultSet);
-            }
-
-            return Optional.ofNullable(entity);
-
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     public static CurrencyDao getInstance() {
