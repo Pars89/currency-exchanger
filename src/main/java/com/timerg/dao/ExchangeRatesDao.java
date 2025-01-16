@@ -181,7 +181,7 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             throw new RuntimeException(e);
         }
     }
-    public Optional<ExchangeRatesEntity> updateByBaseCurrencyIdAndTargetCurrencyId(Integer baseCurrencyId, Integer targetCurrencyId, BigDecimal rate) {
+    public boolean updateByBaseCurrencyIdAndTargetCurrencyId(Integer baseCurrencyId, Integer targetCurrencyId, BigDecimal rate) {
         try (Connection connection = ConnectionManager.get();
              var prepareStatement = connection.prepareStatement(UPDATE_BY_BASE_CURRENCY_ID_AND_TARGET_CURRENCY_ID_SQL)) {
 
@@ -189,15 +189,7 @@ public class ExchangeRatesDao implements Dao<Integer, ExchangeRatesEntity>{
             prepareStatement.setInt(2, baseCurrencyId);
             prepareStatement.setInt(3, targetCurrencyId);
 
-            var resultSet = prepareStatement.executeQuery();
-
-            ExchangeRatesEntity exchangeRatesEntity = null;
-
-            if (resultSet.next()) {
-                exchangeRatesEntity = buildExchangeRatesEntity(resultSet);
-            }
-
-            return Optional.ofNullable(exchangeRatesEntity);
+            return prepareStatement.executeUpdate() > 0;
 
         } catch (SQLException e) {
             throw new RuntimeException(e);
