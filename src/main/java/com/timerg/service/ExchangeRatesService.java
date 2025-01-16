@@ -8,7 +8,6 @@ import com.timerg.entity.ExchangeRatesEntity;
 import com.timerg.mapper.CurrencyEntityMapper;
 import com.timerg.mapper.ReadCurrencyMapper;
 import com.timerg.util.RateFormat;
-import jakarta.servlet.http.Part;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -77,8 +76,8 @@ public class ExchangeRatesService {
 
         // mapping
         ExchangeRatesEntity exchangeRatesEntity = ExchangeRatesEntity.builder()
-                .BaseCurrencyId(currencyEntityMapper.from(readBaseCurrencyDto))
-                .TargetCurrencyId(currencyEntityMapper.from(readTargetCurrencyDto))
+                .baseCurrencyId(currencyEntityMapper.from(readBaseCurrencyDto))
+                .targetCurrencyId(currencyEntityMapper.from(readTargetCurrencyDto))
                 .rate(new BigDecimal(createExchangeRateDto.getRate()))
                 .build();
 
