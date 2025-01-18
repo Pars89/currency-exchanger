@@ -35,9 +35,8 @@ public class ExchangeServlet extends HttpServlet {
         BigDecimal rate;
         ConvertedExchangeRateDto responseDto = null;
 
-        Optional<ReadCurrencyDto> fromCurrency = currencyService.findByCode(from)
-                ;
-        Optional<ReadCurrencyDto> toCurrency = currencyService.findByCode(to);
+        Optional<ReadCurrencyDto> fromCurrency = Optional.ofNullable(currencyService.findByCode(from));
+        Optional<ReadCurrencyDto> toCurrency = Optional.ofNullable(currencyService.findByCode(to));
 
         // calculate AB rate
         Optional<ReadExchangeRateDto> directRateDto = exchangeRatesService.findByCodes(from, to);

@@ -5,8 +5,10 @@ import com.timerg.dto.CreateExchangeRateDto;
 import com.timerg.dto.ReadCurrencyDto;
 import com.timerg.dto.ReadExchangeRateDto;
 import com.timerg.entity.ExchangeRatesEntity;
-import com.timerg.mapper.CurrencyEntityMapper;
-import com.timerg.mapper.ReadCurrencyMapper;
+import com.timerg.mapper.CreateExchangeRateToEntityMapper;
+import com.timerg.mapper.CurrencyEntityToReadMapper;
+import com.timerg.mapper.ExchangeRateEntityToReadMapper;
+import com.timerg.mapper.ReadCurrencyToEntityMapper;
 import com.timerg.util.RateFormat;
 
 import java.math.BigDecimal;
@@ -17,30 +19,24 @@ import java.util.stream.Collectors;
 public class ExchangeRatesService {
     private static final ExchangeRatesService INSTANCE = new ExchangeRatesService();
     private final ExchangeRatesDao exchangeRatesDao = ExchangeRatesDao.getInstance();
-    private final ReadCurrencyMapper readCurrencyMapper = ReadCurrencyMapper.getInstance();
     private final CurrencyService currencyService = CurrencyService.getInstance();
-    private final CurrencyEntityMapper currencyEntityMapper = CurrencyEntityMapper.getInstance();
+    private final ExchangeRateEntityToReadMapper exchangeRateEntityToReadMapper = ExchangeRateEntityToReadMapper.getInstance();
+    private final CreateExchangeRateToEntityMapper createExchangeRateToEntityMapper = CreateExchangeRateToEntityMapper.getInstance();
 
-    private ExchangeRatesService(){
+    private ExchangeRatesService() {
     }
 
     public List<ReadExchangeRateDto> findAll() {
         return exchangeRatesDao.findAll().stream()
-                .map(exchangeRatesEntity -> ReadExchangeRateDto.builder()
-                        .id(exchangeRatesEntity.getId())
-                        .baseCurrencyId(readCurrencyMapper.from(exchangeRatesEntity.getBaseCurrencyId()))
-                        .targetCurrencyId(readCurrencyMapper.from(exchangeRatesEntity.getTargetCurrencyId()))
-                        .rate(exchangeRatesEntity.getRate())
-                        .build()
-                )
+                .map(exchangeRateEntityToReadMapper::from)
                 .collect(Collectors.toList());
     }
 
     public Optional<ReadExchangeRateDto> findByCodes(String baseCode, String targetCode) {
 
-        // get 1 id and 2 id from currencies using code
-        Optional<ReadCurrencyDto> baseCurrencyOpt = currencyService.findByCode(baseCode);
-        Optional<ReadCurrencyDto> targetCurrencyOpt = currencyService.findByCode(targetCode);
+        // get 1 id and 2 id from currencies by code
+        Optional<ReadCurrencyDto> baseCurrencyOpt = getCurrencyDtoByCode(baseCode);
+        Optional<ReadCurrencyDto> targetCurrencyOpt = getCurrencyDtoByCode(targetCode);
 
         // Validation
         if (baseCurrencyOpt.isEmpty() || targetCurrencyOpt.isEmpty()) {
@@ -50,21 +46,17 @@ public class ExchangeRatesService {
         ReadCurrencyDto readBaseCurrencyDto = baseCurrencyOpt.get();
         ReadCurrencyDto readTargetCurrencyDto = targetCurrencyOpt.get();
 
-        // get findByBaseCurrencyIdAndTargetCurrencyId
+        // get exchangeRate
         return exchangeRatesDao.findByBaseCurrencyIdAndTargetCurrencyId(readBaseCurrencyDto.getId(), readTargetCurrencyDto.getId())
-                .map(exchangeRatesEntity -> ReadExchangeRateDto.builder()
-                        .id(exchangeRatesEntity.getId())
-                        .baseCurrencyId(readBaseCurrencyDto)
-                        .targetCurrencyId(readTargetCurrencyDto)
-                        .rate(exchangeRatesEntity.getRate())
-                        .build());
+                .map(exchangeRateEntityToReadMapper::from);
     }
 
     public Optional<ReadExchangeRateDto> create(CreateExchangeRateDto createExchangeRateDto) {
         // validation
-        // get ReadCurrencyDto from currencies using code
-        Optional<ReadCurrencyDto> baseCurrencyOpt = currencyService.findByCode(createExchangeRateDto.getBaseCurrencyId());
-        Optional<ReadCurrencyDto> targetCurrencyOpt = currencyService.findByCode(createExchangeRateDto.getTargetCurrencyId());
+
+        // get ReadCurrencyDto from currencies by code
+        Optional<ReadCurrencyDto> baseCurrencyOpt = getCurrencyDtoByCode(createExchangeRateDto.getBaseCurrencyId());
+        Optional<ReadCurrencyDto> targetCurrencyOpt = getCurrencyDtoByCode(createExchangeRateDto.getTargetCurrencyId());
 
         // Validation
         if (baseCurrencyOpt.isEmpty() || targetCurrencyOpt.isEmpty() || !RateFormat.isValid(createExchangeRateDto.getRate())) {
@@ -75,31 +67,27 @@ public class ExchangeRatesService {
         ReadCurrencyDto readTargetCurrencyDto = targetCurrencyOpt.get();
 
         // mapping
-        ExchangeRatesEntity exchangeRatesEntity = ExchangeRatesEntity.builder()
-                .baseCurrencyId(currencyEntityMapper.from(readBaseCurrencyDto))
-                .targetCurrencyId(currencyEntityMapper.from(readTargetCurrencyDto))
-                .rate(new BigDecimal(createExchangeRateDto.getRate()))
-                .build();
-
+        ExchangeRatesEntity exchangeRatesEntity = createExchangeRateToEntityMapper.from(
+                createExchangeRateDto,
+                readBaseCurrencyDto,
+                readTargetCurrencyDto
+        );
 
         // save
         ExchangeRatesEntity savedExchangeRatesEntity = exchangeRatesDao.save(exchangeRatesEntity);
 
+        // mapping
+        ReadExchangeRateDto readExchangeRateDto = exchangeRateEntityToReadMapper.from(savedExchangeRatesEntity);
 
-        // mapping and return
-        return Optional.of(ReadExchangeRateDto.builder()
-                .id(savedExchangeRatesEntity.getId())
-                .baseCurrencyId(readBaseCurrencyDto)
-                .targetCurrencyId(readTargetCurrencyDto)
-                .rate(savedExchangeRatesEntity.getRate())
-                .build());
+        // return
+        return Optional.ofNullable(readExchangeRateDto);
     }
 
     public Optional<ReadExchangeRateDto> updateByCodes(String baseCode, String targetCode, String rate) {
 
         // get 1 id and 2 id from currencies using code
-        Optional<ReadCurrencyDto> baseCurrencyOpt = currencyService.findByCode(baseCode);
-        Optional<ReadCurrencyDto> targetCurrencyOpt = currencyService.findByCode(targetCode);
+        Optional<ReadCurrencyDto> baseCurrencyOpt = getCurrencyDtoByCode(baseCode);
+        Optional<ReadCurrencyDto> targetCurrencyOpt = getCurrencyDtoByCode(targetCode);
 
         // Validation
         if (baseCurrencyOpt.isEmpty() || targetCurrencyOpt.isEmpty() || !RateFormat.isValid(rate)) {
@@ -109,28 +97,25 @@ public class ExchangeRatesService {
         ReadCurrencyDto readBaseCurrencyDto = baseCurrencyOpt.get();
         ReadCurrencyDto readTargetCurrencyDto = targetCurrencyOpt.get();
 
-        // save updateByBaseCurrencyIdAndTargetCurrencyId and check
+        // save
         if (exchangeRatesDao.updateByBaseCurrencyIdAndTargetCurrencyId(
                 readBaseCurrencyDto.getId(),
                 readTargetCurrencyDto.getId(),
                 new BigDecimal(rate))) {
 
             return exchangeRatesDao.findByBaseCurrencyIdAndTargetCurrencyId(readBaseCurrencyDto.getId(), readTargetCurrencyDto.getId())
-                    .map(exchangeRatesEntity -> ReadExchangeRateDto.builder()
-                            .id(exchangeRatesEntity.getId())
-                            .baseCurrencyId(readBaseCurrencyDto)
-                            .targetCurrencyId(readTargetCurrencyDto)
-                            .rate(exchangeRatesEntity.getRate())
-                            .build());
+                    .map(exchangeRateEntityToReadMapper::from);
 
         } else {
             return Optional.empty();
         }
     }
 
+    private Optional<ReadCurrencyDto> getCurrencyDtoByCode(String code){
+        return Optional.ofNullable(currencyService.findByCode(code));
+    }
+
     public static ExchangeRatesService getInstance() {
         return INSTANCE;
     }
-
-
 }
