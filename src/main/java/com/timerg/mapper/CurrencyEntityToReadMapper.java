@@ -3,10 +3,10 @@ package com.timerg.mapper;
 import com.timerg.dto.ReadCurrencyDto;
 import com.timerg.entity.CurrencyEntity;
 
-public class ReadCurrencyMapper implements Mapper<CurrencyEntity, ReadCurrencyDto>{
-    private static final ReadCurrencyMapper INSTANCE = new ReadCurrencyMapper();
+public class CurrencyEntityToReadMapper implements Mapper<CurrencyEntity, ReadCurrencyDto>{
+    private static final CurrencyEntityToReadMapper INSTANCE = new CurrencyEntityToReadMapper();
 
-    private ReadCurrencyMapper(){
+    private CurrencyEntityToReadMapper(){
     }
 
     @Override
@@ -20,7 +20,7 @@ public class ReadCurrencyMapper implements Mapper<CurrencyEntity, ReadCurrencyDt
                 .build();
     }
 
-    public static ReadCurrencyMapper getInstance() {
+    public static CurrencyEntityToReadMapper getInstance() {
         return INSTANCE;
     }
 }

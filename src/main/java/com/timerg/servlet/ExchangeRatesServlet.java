@@ -20,7 +20,7 @@ import java.util.Optional;
 @WebServlet("/exchangeRates")
 public class ExchangeRatesServlet extends HttpServlet {
     private final ExchangeRatesService exchangeRatesService = ExchangeRatesService.getInstance();
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {

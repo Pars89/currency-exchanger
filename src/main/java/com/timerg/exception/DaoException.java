@@ -4,8 +4,15 @@ import java.sql.SQLException;
 
 public class DaoException extends RuntimeException {
 
-    private static final String MESSAGE_ERROR = "База данных недоступна";
-    public DaoException(SQLException e) {
-        super(MESSAGE_ERROR);
+    public DaoException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public DaoException(String message) {
+        super(message);
+    }
+
+    public DaoException(Throwable cause) {
+        super(cause);
     }
 }

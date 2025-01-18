@@ -70,7 +70,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             return currencyEntity;
 
         } catch (SQLException e) {
-            throw new DaoException(e);
+            throw new DaoException("Error saving CurrencyEntity to the database", e);
         }
     }
 
@@ -88,7 +88,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             prepareStatement.executeUpdate();
 
         } catch (SQLException e) {
-            throw new DaoException(e);
+            throw new DaoException("Error updating CurrencyEntity in the database", e);
         }
     }
 
@@ -105,7 +105,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             return executeUpdate == 1;
 
         } catch (SQLException e) {
-            throw new DaoException(e);
+            throw new DaoException("Error deleting CurrencyEntity in the database", e);
         }
     }
 
@@ -114,7 +114,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
         try (Connection connection = ConnectionManager.get()) {
             return findById(connection, id);
         } catch (SQLException e) {
-            throw new DaoException(e);
+            throw new DaoException("Error finding CurrencyEntity by id in the database", e);
         }
     }
 
@@ -126,7 +126,16 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
         try (Connection connection = ConnectionManager.get()) {
             return findBy(connection, FIND_BY_CODE_SQL, code);
         } catch (SQLException e) {
-            throw new DaoException(e);
+            throw new DaoException("Error finding CurrencyEntity by code in the database", e);
+        }
+    }
+
+    public boolean existByCode(String code) {
+        try (Connection connection = ConnectionManager.get()) {
+            return findBy(connection, FIND_BY_CODE_SQL, code).isPresent();
+            // Changed FIND_BY_CODE_SQL On EXIST_BY_CODE_SQL (for performance)
+        } catch (SQLException e) {
+            throw new DaoException("Error existing CurrencyEntity by code in the database", e);
         }
     }
 
@@ -146,7 +155,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             return Optional.ofNullable(entity);
 
         } catch (SQLException e) {
-            throw new DaoException(e);
+            throw new DaoException("Error finding CurrencyEntity by ... in the database", e);
         }
     }
 
@@ -167,7 +176,7 @@ public class CurrencyDao implements Dao<Integer, CurrencyEntity> {
             return currencies;
 
         } catch (SQLException e) {
-            throw new DaoException(e);
+            throw new DaoException("Error finding all CurrencyEntity in the database", e);
         }
     }
 
