@@ -4,7 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.timerg.dto.CreateExchangeRateDto;
 import com.timerg.dto.ReadCurrencyDto;
 import com.timerg.dto.ReadExchangeRateDto;
+import com.timerg.exception.CurrencyNotFoundException;
+import com.timerg.exception.ExchangeRateAlreadyExistException;
+import com.timerg.exception.ValidationException;
 import com.timerg.service.ExchangeRatesService;
+import com.timerg.validation.ErrorResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -24,42 +28,57 @@ public class ExchangeRatesServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        List<ReadExchangeRateDto> exchangeRatesServiceAll = exchangeRatesService.findAll();
-
-        String ans = objectMapper.writeValueAsString(exchangeRatesServiceAll);
-
-        resp.setContentType("application/json");
-        resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
-
-        try (PrintWriter writer = resp.getWriter()) {
-            writer.write(ans);
+        try {
+            List<ReadExchangeRateDto> exchangeRatesServiceAll = exchangeRatesService.findAll();
+            sendJsonResponse(resp, HttpServletResponse.SC_OK, exchangeRatesServiceAll);
+        } catch (Exception e) {
+            sendErrorResponse(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "База данных недоступна");
         }
+        
     }
-
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 
+        try {
+            ReadExchangeRateDto readExchangeRateDto = extractDtoFromRequest(req);
+            sendJsonResponse(resp, HttpServletResponse.SC_CREATED, readExchangeRateDto);
+        } catch (ValidationException e) {
+            sendErrorResponse(resp, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+        } catch (ExchangeRateAlreadyExistException e) {
+            sendErrorResponse(resp, HttpServletResponse.SC_CONFLICT, e.getMessage());
+        } catch (CurrencyNotFoundException e) {
+            sendErrorResponse(resp, HttpServletResponse.SC_NOT_FOUND, e.getMessage());
+        } catch (Exception e) {
+            sendErrorResponse(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "База данных недоступна");
+        }
 
-        Optional<ReadExchangeRateDto> readExchangeRateDto = exchangeRatesService.create(
+    }
+
+    private ReadExchangeRateDto extractDtoFromRequest(HttpServletRequest req) {
+        return exchangeRatesService.create(
                 CreateExchangeRateDto.builder()
                         .baseCurrencyId(req.getParameter("baseCurrencyCode"))
                         .targetCurrencyId(req.getParameter("targetCurrencyCode"))
                         .rate(req.getParameter("rate"))
-                        .build()
-        );
+                        .build());
+    }
 
-        String ans = "";
-        if (readExchangeRateDto.isPresent()) {
-            ans = objectMapper.writeValueAsString(readExchangeRateDto.get());
-        } else {
-            ans = "null";
-        }
 
+    private void sendJsonResponse(HttpServletResponse resp, int status,  Object data) throws IOException {
         resp.setContentType("application/json");
         resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
-
+        resp.setStatus(status);
         try (PrintWriter writer = resp.getWriter()) {
-            writer.write(ans);
+            writer.write(objectMapper.writeValueAsString(data));
+        }
+    }
+
+    private void sendErrorResponse(HttpServletResponse resp, int status, String message) throws IOException {
+        resp.setContentType("application/json");
+        resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resp.setStatus(status);
+        try (PrintWriter writer = resp.getWriter()) {
+            writer.write(objectMapper.writeValueAsString(ErrorResponse.of(String.valueOf(status), message)));
         }
     }
 }
