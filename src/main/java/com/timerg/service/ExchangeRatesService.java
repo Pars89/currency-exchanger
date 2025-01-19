@@ -4,12 +4,13 @@ import com.timerg.dao.ExchangeRatesDao;
 import com.timerg.dto.CreateExchangeRateDto;
 import com.timerg.dto.ReadCurrencyDto;
 import com.timerg.dto.ReadExchangeRateDto;
-import com.timerg.entity.ExchangeRatesEntity;
+import com.timerg.exception.CurrencyNotFoundException;
+import com.timerg.exception.ExchangeRateAlreadyExistException;
+import com.timerg.exception.ValidationException;
 import com.timerg.mapper.CreateExchangeRateToEntityMapper;
-import com.timerg.mapper.CurrencyEntityToReadMapper;
 import com.timerg.mapper.ExchangeRateEntityToReadMapper;
-import com.timerg.mapper.ReadCurrencyToEntityMapper;
-import com.timerg.util.RateFormat;
+import com.timerg.validation.CreateExchangeRateValidator;
+import com.timerg.validation.ValidationResult;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,6 +23,7 @@ public class ExchangeRatesService {
     private final CurrencyService currencyService = CurrencyService.getInstance();
     private final ExchangeRateEntityToReadMapper exchangeRateEntityToReadMapper = ExchangeRateEntityToReadMapper.getInstance();
     private final CreateExchangeRateToEntityMapper createExchangeRateToEntityMapper = CreateExchangeRateToEntityMapper.getInstance();
+    private final CreateExchangeRateValidator createExchangeRateValidator = CreateExchangeRateValidator.getInstance();
 
     private ExchangeRatesService() {
     }
@@ -32,87 +34,86 @@ public class ExchangeRatesService {
                 .collect(Collectors.toList());
     }
 
-    public Optional<ReadExchangeRateDto> findByCodes(String baseCode, String targetCode) {
+    public ReadExchangeRateDto findByCodes(String baseCode, String targetCode) {
 
         // get 1 id and 2 id from currencies by code
-        Optional<ReadCurrencyDto> baseCurrencyOpt = getCurrencyDtoByCode(baseCode);
-        Optional<ReadCurrencyDto> targetCurrencyOpt = getCurrencyDtoByCode(targetCode);
-
-        // Validation
-        if (baseCurrencyOpt.isEmpty() || targetCurrencyOpt.isEmpty()) {
-            return Optional.empty();  // Одна из валют не найдена
-        }
-
-        ReadCurrencyDto readBaseCurrencyDto = baseCurrencyOpt.get();
-        ReadCurrencyDto readTargetCurrencyDto = targetCurrencyOpt.get();
+        var readBaseCurrencyDto = getReadCurrencyDtoByCodeOrThrow(baseCode);
+        var readTargetCurrencyDto = getReadCurrencyDtoByCodeOrThrow(targetCode);
 
         // get exchangeRate
         return exchangeRatesDao.findByBaseCurrencyIdAndTargetCurrencyId(readBaseCurrencyDto.getId(), readTargetCurrencyDto.getId())
-                .map(exchangeRateEntityToReadMapper::from);
+                .map(exchangeRateEntityToReadMapper::from)
+                .orElseThrow(() -> new CurrencyNotFoundException("Курс для валютной пары не найден: " + baseCode + " -> " + targetCode));
     }
 
-    public Optional<ReadExchangeRateDto> create(CreateExchangeRateDto createExchangeRateDto) {
+    public ReadExchangeRateDto create(CreateExchangeRateDto createExchangeRateDto) {
         // validation
+        validateExchangeRateDto(createExchangeRateDto);
 
         // get ReadCurrencyDto from currencies by code
-        Optional<ReadCurrencyDto> baseCurrencyOpt = getCurrencyDtoByCode(createExchangeRateDto.getBaseCurrencyId());
-        Optional<ReadCurrencyDto> targetCurrencyOpt = getCurrencyDtoByCode(createExchangeRateDto.getTargetCurrencyId());
+        var readBaseCurrencyDto = getReadCurrencyDtoByCodeOrThrow(createExchangeRateDto.getBaseCurrencyId());
+        var readTargetCurrencyDto = getReadCurrencyDtoByCodeOrThrow(createExchangeRateDto.getTargetCurrencyId());
 
-        // Validation
-        if (baseCurrencyOpt.isEmpty() || targetCurrencyOpt.isEmpty() || !RateFormat.isValid(createExchangeRateDto.getRate())) {
-            return Optional.empty();  // Одна из валют не найдена
-        }
-
-        ReadCurrencyDto readBaseCurrencyDto = baseCurrencyOpt.get();
-        ReadCurrencyDto readTargetCurrencyDto = targetCurrencyOpt.get();
+        checkDuplicateExchangeRate(readBaseCurrencyDto.getId(), readTargetCurrencyDto.getId());
 
         // mapping
-        ExchangeRatesEntity exchangeRatesEntity = createExchangeRateToEntityMapper.from(
+        var exchangeRatesEntity = createExchangeRateToEntityMapper.from(
                 createExchangeRateDto,
                 readBaseCurrencyDto,
                 readTargetCurrencyDto
         );
 
         // save
-        ExchangeRatesEntity savedExchangeRatesEntity = exchangeRatesDao.save(exchangeRatesEntity);
+        var savedExchangeRatesEntity = exchangeRatesDao.save(exchangeRatesEntity);
 
-        // mapping
-        ReadExchangeRateDto readExchangeRateDto = exchangeRateEntityToReadMapper.from(savedExchangeRatesEntity);
-
-        // return
-        return Optional.ofNullable(readExchangeRateDto);
+        // mapping and return
+        return exchangeRateEntityToReadMapper.from(savedExchangeRatesEntity);
     }
 
-    public Optional<ReadExchangeRateDto> updateByCodes(String baseCode, String targetCode, String rate) {
-
-        // get 1 id and 2 id from currencies using code
-        Optional<ReadCurrencyDto> baseCurrencyOpt = getCurrencyDtoByCode(baseCode);
-        Optional<ReadCurrencyDto> targetCurrencyOpt = getCurrencyDtoByCode(targetCode);
-
-        // Validation
-        if (baseCurrencyOpt.isEmpty() || targetCurrencyOpt.isEmpty() || !RateFormat.isValid(rate)) {
-            return Optional.empty();  // Одна из валют не найдена
+    private void checkDuplicateExchangeRate(Integer baseCurrencyId, Integer targetCurrencyId) {
+        if (exchangeRatesDao.findByBaseCurrencyIdAndTargetCurrencyId(baseCurrencyId, targetCurrencyId).isPresent()) {
+            throw new ExchangeRateAlreadyExistException("Курс для этой валютной пары уже существует");
         }
+    }
 
-        ReadCurrencyDto readBaseCurrencyDto = baseCurrencyOpt.get();
-        ReadCurrencyDto readTargetCurrencyDto = targetCurrencyOpt.get();
+    public ReadExchangeRateDto updateByCodes(CreateExchangeRateDto createExchangeRateDto) {
 
-        // save
-        if (exchangeRatesDao.updateByBaseCurrencyIdAndTargetCurrencyId(
+        validateExchangeRateDto(createExchangeRateDto);
+
+        var readBaseCurrencyDto = getReadCurrencyDtoByCodeOrThrow(createExchangeRateDto.getBaseCurrencyId());
+        var readTargetCurrencyDto = getReadCurrencyDtoByCodeOrThrow(createExchangeRateDto.getTargetCurrencyId());
+
+        boolean updated = exchangeRatesDao.updateByBaseCurrencyIdAndTargetCurrencyId(
                 readBaseCurrencyDto.getId(),
                 readTargetCurrencyDto.getId(),
-                new BigDecimal(rate))) {
+                new BigDecimal(createExchangeRateDto.getRate())
+        );
 
-            return exchangeRatesDao.findByBaseCurrencyIdAndTargetCurrencyId(readBaseCurrencyDto.getId(), readTargetCurrencyDto.getId())
-                    .map(exchangeRateEntityToReadMapper::from);
+        // save
+        if (!updated) {
+            throw new CurrencyNotFoundException("Курс для валютной пары не найден: " +
+                                                createExchangeRateDto.getBaseCurrencyId() + " -> " +
+                                                createExchangeRateDto.getTargetCurrencyId());
+        }
 
-        } else {
-            return Optional.empty();
+        return exchangeRatesDao.findByBaseCurrencyIdAndTargetCurrencyId(readBaseCurrencyDto.getId(), readTargetCurrencyDto.getId())
+                .map(exchangeRateEntityToReadMapper::from)
+                .orElseThrow(() -> new CurrencyNotFoundException("Не удалось найти обновлённый курс валют"));
+    }
+
+    private void validateExchangeRateDto(CreateExchangeRateDto createExchangeRateDto) {
+        ValidationResult validationResult = createExchangeRateValidator.isValid(createExchangeRateDto);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult.getErrorResponses());
         }
     }
 
     private Optional<ReadCurrencyDto> getCurrencyDtoByCode(String code){
         return Optional.ofNullable(currencyService.findByCode(code));
+    }
+    private ReadCurrencyDto getReadCurrencyDtoByCodeOrThrow(String code) {
+        return Optional.ofNullable(currencyService.findByCode(code))
+                .orElseThrow(() -> new CurrencyNotFoundException("Валюта с кодом " + code + " не найдена"));
     }
 
     public static ExchangeRatesService getInstance() {

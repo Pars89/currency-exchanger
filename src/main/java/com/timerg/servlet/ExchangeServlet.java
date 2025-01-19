@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.timerg.dto.ConvertedExchangeRateDto;
 import com.timerg.dto.ReadCurrencyDto;
 import com.timerg.dto.ReadExchangeRateDto;
+import com.timerg.exception.CurrencyNotFoundException;
+import com.timerg.exception.ValidationException;
 import com.timerg.service.CurrencyService;
 import com.timerg.service.ExchangeRatesService;
+import com.timerg.validation.ErrorResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -17,7 +20,6 @@ import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 
 @WebServlet("/exchange")
 public class ExchangeServlet extends HttpServlet {
@@ -27,64 +29,69 @@ public class ExchangeServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String from = req.getParameter("from");
-        String to = req.getParameter("to");
-        BigDecimal amount = new BigDecimal(req.getParameter("amount"));
+        try {
+            String from = req.getParameter("from");
+            String to = req.getParameter("to");
+            BigDecimal amount = new BigDecimal(req.getParameter("amount"));
 
-        BigDecimal convertedAmount;
-        BigDecimal rate;
-        ConvertedExchangeRateDto responseDto = null;
+            ReadCurrencyDto fromCurrency = currencyService.findByCode(from);
+            ReadCurrencyDto toCurrency = currencyService.findByCode(to);
 
-        Optional<ReadCurrencyDto> fromCurrency = Optional.ofNullable(currencyService.findByCode(from));
-        Optional<ReadCurrencyDto> toCurrency = Optional.ofNullable(currencyService.findByCode(to));
+            BigDecimal rate = calculateRate(from, to);
+            BigDecimal convertedAmount = rate.multiply(amount);
 
-        // calculate AB rate
-        Optional<ReadExchangeRateDto> directRateDto = exchangeRatesService.findByCodes(from, to);
-        if (directRateDto.isPresent()) {
-            rate = directRateDto.get().getRate();
-            convertedAmount = rate.multiply(amount);
+            ConvertedExchangeRateDto responseDto = createConvertedExchangeRateDto(
+                    fromCurrency, toCurrency, rate, amount, convertedAmount
+            );
 
-            responseDto = createConvertedExchangeRateDto(fromCurrency.get(), toCurrency.get(), rate, amount, convertedAmount);
+            sendJsonResponse(resp, HttpServletResponse.SC_OK, responseDto);
+        } catch (ValidationException e) {
+            sendErrorResponse(resp, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+        } catch (CurrencyNotFoundException e) {
+            sendErrorResponse(resp, HttpServletResponse.SC_NOT_FOUND, e.getMessage());
+        }  catch (Exception e) {
+            sendErrorResponse(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "База данных недоступна");
+        }
+    }
 
-        } else {
-            // calculate BA rate
-            Optional<ReadExchangeRateDto> reverseRateDto = exchangeRatesService.findByCodes(to, from);
-
-            if (reverseRateDto.isPresent()) {
-                rate = BigDecimal.ONE.divide(reverseRateDto.get().getRate(), 6, RoundingMode.HALF_UP);
-                convertedAmount = rate.multiply(amount);
-
-                responseDto = createConvertedExchangeRateDto(fromCurrency.get(), toCurrency.get(), rate, amount, convertedAmount);
-
-            } else {
-                // calculate ( (USD-A) / (USD-B) )
-                String codeUSD = "USD";
-                Optional<ReadExchangeRateDto> usdToFromRateDto = exchangeRatesService.findByCodes(codeUSD, from);
-                Optional<ReadExchangeRateDto> usdToToRateDto = exchangeRatesService.findByCodes(codeUSD, to);
-
-                if (usdToFromRateDto.isPresent() && usdToToRateDto.isPresent()) {
-
-                    BigDecimal usdToFromRate = usdToFromRateDto.get().getRate();
-                    BigDecimal usdToToRate = usdToToRateDto.get().getRate();
-
-                    rate = usdToFromRate.divide(usdToToRate, 6, RoundingMode.HALF_UP);
-                    convertedAmount = rate.multiply(amount);
-
-                    responseDto = createConvertedExchangeRateDto(fromCurrency.get(), toCurrency.get(), rate, amount, convertedAmount);
-
-                } else {
-                    // Если курс не найден, ошибка
-                    throw new RuntimeException("Невозможно рассчитать курс для выбранных валют.");
-                }
-            }
+    private BigDecimal calculateRate(String from, String to) {
+        try {
+            return getDirectRate(from, to);
+        } catch (CurrencyNotFoundException e) {
+            // Продолжаем, если прямой курс не найден
         }
 
-        resp.setContentType("application/json");
-        resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
-
-        try (PrintWriter writer = resp.getWriter()) {
-            writer.write(objectMapper.writeValueAsString(responseDto));
+        try {
+            return getReverseRate(from, to);
+        } catch (CurrencyNotFoundException e) {
+            // Продолжаем, если обратный курс не найден
         }
+
+        try {
+            return getRateViaUsd(from, to);
+        } catch (CurrencyNotFoundException e) {
+            throw new RuntimeException("Невозможно рассчитать курс для выбранных валют.");
+        }
+    }
+    private BigDecimal getDirectRate(String from, String to) throws CurrencyNotFoundException {
+        ReadExchangeRateDto directRateDto = exchangeRatesService.findByCodes(from, to);
+        return directRateDto.getRate();
+    }
+
+    private BigDecimal getReverseRate(String from, String to) throws CurrencyNotFoundException {
+        ReadExchangeRateDto reverseRateDto = exchangeRatesService.findByCodes(to, from);
+        return BigDecimal.ONE.divide(reverseRateDto.getRate(), 6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal getRateViaUsd(String from, String to) throws CurrencyNotFoundException {
+        String codeUSD = "USD";
+        ReadExchangeRateDto usdToFromRateDto = exchangeRatesService.findByCodes(codeUSD, from);
+        ReadExchangeRateDto usdToToRateDto = exchangeRatesService.findByCodes(codeUSD, to);
+
+        BigDecimal usdToFromRate = usdToFromRateDto.getRate();
+        BigDecimal usdToToRate = usdToToRateDto.getRate();
+
+        return usdToFromRate.divide(usdToToRate, 6, RoundingMode.HALF_UP);
     }
 
     private ConvertedExchangeRateDto createConvertedExchangeRateDto(ReadCurrencyDto from,
@@ -99,5 +106,22 @@ public class ExchangeServlet extends HttpServlet {
                 .amount(amount)
                 .convertedAmount(convertedAmount)
                 .build();
+    }
+    private void sendJsonResponse(HttpServletResponse resp, int status,  Object data) throws IOException {
+        resp.setContentType("application/json");
+        resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resp.setStatus(status);
+        try (PrintWriter writer = resp.getWriter()) {
+            writer.write(objectMapper.writeValueAsString(data));
+        }
+    }
+
+    private void sendErrorResponse(HttpServletResponse resp, int status, String message) throws IOException {
+        resp.setContentType("application/json");
+        resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resp.setStatus(status);
+        try (PrintWriter writer = resp.getWriter()) {
+            writer.write(objectMapper.writeValueAsString(ErrorResponse.of(String.valueOf(status), message)));
+        }
     }
 }
