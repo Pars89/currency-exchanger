@@ -100,7 +100,6 @@ public class ExchangeRateServlet extends HttpServlet {
 
     private void sendJsonResponse(HttpServletResponse resp, int status,  Object data) throws IOException {
         resp.setContentType("application/json");
-        resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
         resp.setStatus(status);
         try (PrintWriter writer = resp.getWriter()) {
             writer.write(objectMapper.writeValueAsString(data));
@@ -109,7 +108,6 @@ public class ExchangeRateServlet extends HttpServlet {
 
     private void sendErrorResponse(HttpServletResponse resp, int status, String message) throws IOException {
         resp.setContentType("application/json");
-        resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
         resp.setStatus(status);
         try (PrintWriter writer = resp.getWriter()) {
             writer.write(objectMapper.writeValueAsString(ErrorResponse.of(String.valueOf(status), message)));
